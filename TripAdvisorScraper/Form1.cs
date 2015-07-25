@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text;
 using System.Windows.Forms;
 
 namespace TripAdvisorScraper
@@ -15,8 +8,10 @@ namespace TripAdvisorScraper
         public Form1()
         {
             InitializeComponent();
-            TAScraper hotel = new TAScraper(@"http://www.tripadvisor.com.au/Hotel_Review-g255100-d256779-Reviews-Adelphi_Hotel-Melbourne_Victoria.html");
-
+        }
+        /**
+            string url = @"http://www.tripadvisor.com.au/Hotel_Review-g255100-d256779-Reviews-Adelphi_Hotel-Melbourne_Victoria.html";
+            TAScraper hotel = new TAScraper(url);
             txtOutput.Text = getHotelString(hotel);
             txtOutput.Text += getReviewStrings(hotel);
         }
@@ -46,5 +41,6 @@ namespace TripAdvisorScraper
             }
             return sb.ToString();
         }
+        **/
     }
 }

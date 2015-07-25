@@ -12,8 +12,9 @@ using HtmlAgilityPack;
 using ScrapySharp.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Web;
+using System.Threading.Tasks;
 
 namespace TripAdvisorScraper
 {
@@ -36,16 +37,22 @@ namespace TripAdvisorScraper
         public string StarRating;
         public string AverageRating;
         public int NumReviews;
-        
+
         public List<string[]> Reviews = new List<string[]>();
 
-        public TAScraper (string URL) : base(URL)
+        public TAScraper(string URL)
+            : base(URL)
+        {
+            processHotel(URL);
+        }
+
+        private void processHotel(string url)
         {
             string tempInput = "";
             var web = new HtmlWeb();
             var doc = web.Load(urlFull);
 
-            if(web.StatusCode == System.Net.HttpStatusCode.OK)
+            if (web.StatusCode == System.Net.HttpStatusCode.OK)
             {
                 var docNode = doc.DocumentNode;
                 string fullHotelName = docNode.CssSelect("#HEADING").Single().InnerText.Trim();
@@ -59,16 +66,33 @@ namespace TripAdvisorScraper
 
                 if (NumReviews > 0)
                 {
+                    Reviews = new List<string[]>(NumReviews);
                     byte numPages = (byte)(NumReviews / REVIEWS_PER_PAGE);
+
+                    HtmlNode[] allPagesForHotel = new HtmlNode[numPages];
                     for (int pageCount = 0; pageCount < numPages; pageCount++)
                     {
-                        processPage(docNode);
+                        Stopwatch stopwatch = new Stopwatch();
+                        stopwatch.Start();
 
-                        string urlPage = urlListHead + "or" + (pageCount+1) * 10 + "-" + urlTail;
-                        Console.WriteLine();
-                        Console.WriteLine(urlPage);
+                        string urlPage = urlListHead + "or" + (pageCount + 1) * 10 + "-" + urlTail;
                         doc = web.Load(urlPage);
-                        docNode = doc.DocumentNode;
+
+                        allPagesForHotel[pageCount] = doc.DocumentNode.CssSelect("#REVIEWS").Single();
+
+                        stopwatch.Stop();
+                        Console.WriteLine(stopwatch.ElapsedMilliseconds + "ms/PageLoad");
+                    }
+
+                    for (int pageCount = 0; pageCount < numPages; pageCount++)
+                    {
+                        Stopwatch stopwatch = new Stopwatch();
+                        stopwatch.Start();
+                        processPage(allPagesForHotel[pageCount]);
+                        stopwatch.Stop();
+
+                        Console.WriteLine(stopwatch.ElapsedMilliseconds / NumReviews + "ms/Rev");
+                        Console.WriteLine((pageCount + 1) * 10);
                     }
                 }
                 else
@@ -82,42 +106,25 @@ namespace TripAdvisorScraper
             }
         }
 
-        private void getHotelLocation(HtmlNode node, string name)
-        {
-            int comma = name.IndexOf(',');
-            if( comma != -1)
-            {
-                Name = name.Substring(0, comma);
-                Location = name.Substring(comma + 1);
-                return;
-            }
-
-            string[] Capitals = new string[] { "Adelaide", "Brisbane", "Canberra", "Darwin", "Hobart", "Melbourne", "Sydney", "Perth" };
-            foreach (string s in Capitals)
-            {
-                int loc = name.ToUpper().IndexOf(s.ToUpper());
-                if (loc != -1)
-                {
-                    Name = name.Substring(0, loc);
-                    Location = name.Substring(loc);
-                    return;
-                }
-            }
-
-            Name = name;
-            Location = node.CssSelect("a.breadcrumb_link[onclick*='City'] > span").Single().InnerText.Trim();
-            return;
-        }
-
         private void processPage(HtmlNode nodePage)
         {
             var allReviewsOnPage = nodePage.CssSelect(".review").ToArray();
-            byte onPage = (byte)allReviewsOnPage.Length; 
-            for (int i = 0; i < onPage; i++)
+
+            byte onPage = (byte)allReviewsOnPage.Length;
+
+            Task[] revTasks = new Task[onPage];
+            List<string[]> revOut = new List<string[]>(onPage);
+            for (int revCount = 0; revCount < onPage; revCount += 1)
             {
-                Reviews.Add(processReview(allReviewsOnPage[i]));
-                Console.Write(i + " ");
+                var currentRev = allReviewsOnPage[revCount];
+                revTasks[revCount] = Task.Factory.StartNew(() =>
+                {
+                    revOut.Add(processReview(currentRev));
+                });
             }
+            Task.WaitAll(revTasks);
+
+            Reviews.AddRange(revOut);
         }
 
         private string[] processReview(HtmlNode nodeReview)
@@ -161,8 +168,35 @@ namespace TripAdvisorScraper
 
             // ASPECTS
             result[Section.AspectReviews] = "??";
-            
+
             return result;
+        }
+
+        private void getHotelLocation(HtmlNode node, string name)
+        {
+            int comma = name.IndexOf(',');
+            if (comma != -1)
+            {
+                Name = name.Substring(0, comma);
+                Location = name.Substring(comma + 1);
+                return;
+            }
+
+            string[] Capitals = new string[] { "Adelaide", "Brisbane", "Canberra", "Darwin", "Hobart", "Melbourne", "Sydney", "Perth" };
+            foreach (string s in Capitals)
+            {
+                int loc = name.ToUpper().IndexOf(s.ToUpper());
+                if (loc != -1)
+                {
+                    Name = name.Substring(0, loc);
+                    Location = name.Substring(loc);
+                    return;
+                }
+            }
+
+            Name = name;
+            Location = node.CssSelect("a.breadcrumb_link[onclick*='City'] > span").Single().InnerText.Trim();
+            return;
         }
     }
 }
